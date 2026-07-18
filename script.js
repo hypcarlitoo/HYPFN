@@ -1,19 +1,24 @@
 /*
-  ===== LIEN DE TELECHARGEMENT =====
-  Après avoir créé ta Release GitHub, le fichier .exe doit avoir le même nom
-  que celui qui se trouve à la fin de l'URL ci-dessous.
-
-  Exemple si ton fichier se nomme mon-launcher.exe :
-  const DOWNLOAD_URL = "https://github.com/hypcarlitoo/fortnite-launcher/releases/latest/download/mon-launcher.exe";
+  ===== REPOSITORY GITHUB =====
+  Le site trouve automatiquement le .exe (ou le .zip) de la dernière Release.
+  Tu n'as donc pas besoin d'écrire le nom du fichier ici.
 */
-const DOWNLOAD_URL = "https://github.com/hypcarlitoo/fortnite-launcher/releases/latest/download/HYPCARLITOO-Fortnite-Launcher-Setup.exe";
+const GITHUB_REPOSITORY = "hypcarlitoo/HYPFN";
+const RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest`;
+const RELEASE_PAGE_URL = `https://github.com/${GITHUB_REPOSITORY}/releases/latest`;
 
 const views = [...document.querySelectorAll("[data-view]")];
 const routes = [...document.querySelectorAll("[data-route]")];
 const nav = document.querySelector(".site-nav");
 const menuToggle = document.querySelector(".menu-toggle");
 const toast = document.querySelector("#toast");
+const downloadLinks = [...document.querySelectorAll(".download-link")];
+const cursorGlow = document.createElement("div");
+cursorGlow.className = "cursor-glow";
+cursorGlow.setAttribute("aria-hidden", "true");
+document.body.append(cursorGlow);
 let toastTimer;
+let downloadReady = false;
 
 function showToast(message) {
   toast.innerHTML = message;
@@ -52,13 +57,58 @@ menuToggle.addEventListener("click", () => {
   menuToggle.setAttribute("aria-expanded", String(isOpen));
 });
 
-document.querySelectorAll(".download-link").forEach((link) => {
-  link.href = DOWNLOAD_URL;
-  link.addEventListener("click", () => {
-    showToast("<strong>Téléchargement :</strong> ouverture de la dernière version publiée.");
+function setDownloadLinks(url) {
+  downloadLinks.forEach((link) => {
+    link.href = url;
+    link.rel = "noopener";
   });
+}
+
+async function findLatestDownload() {
+  // En attendant la réponse, le bouton ouvre la page Releases plutôt qu'une page 404.
+  setDownloadLinks(RELEASE_PAGE_URL);
+
+  try {
+    const response = await fetch(RELEASE_API_URL, {
+      headers: { Accept: "application/vnd.github+json" }
+    });
+
+    if (!response.ok) throw new Error("Aucune Release publiée");
+
+    const release = await response.json();
+    const asset = release.assets.find((file) => /\.(exe|msi)$/i.test(file.name))
+      || release.assets.find((file) => /\.zip$/i.test(file.name))
+      || release.assets[0];
+
+    if (!asset) throw new Error("Aucun fichier dans la Release");
+
+    setDownloadLinks(asset.browser_download_url);
+    downloadReady = true;
+  } catch (error) {
+    // La page Releases permet au visiteur de voir ce qui manque si la Release n'est pas encore publiée.
+    downloadReady = false;
+  }
+}
+
+downloadLinks.forEach((link) => {
+  link.addEventListener("click", () => {
+    const message = downloadReady
+      ? "<strong>Téléchargement :</strong> ouverture du fichier de la dernière version."
+      : "<strong>Release introuvable :</strong> ouverture de la page des Releases.";
+    showToast(message);
+  });
+});
+
+window.addEventListener("pointermove", (event) => {
+  if (event.pointerType !== "mouse") return;
+  document.documentElement.style.setProperty("--mouse-x", `${event.clientX}px`);
+  document.documentElement.style.setProperty("--mouse-y", `${event.clientY}px`);
+  cursorGlow.style.left = `${event.clientX}px`;
+  cursorGlow.style.top = `${event.clientY}px`;
+  document.body.classList.add("mouse-active");
 });
 
 window.addEventListener("hashchange", showView);
 document.querySelector("#year").textContent = new Date().getFullYear();
+findLatestDownload();
 showView();
