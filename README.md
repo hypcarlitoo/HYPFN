@@ -1,1 +1,1 @@
-# fortnite-launcher
+HYPFN 1.0.0
